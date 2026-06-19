@@ -1,0 +1,4 @@
+USER    PID %CPU %MEM     VSZ   RSS TT  STAT STARTED    TIME COMMAND
+Cooki 95524  0.1  0.1 1705760 71536  -  S    00:12   0:00.01 php-fpm: pool user_Cooki (php-fpm)
+Cooki 95523  0.0  0.1 1705824 77532  -  S    00:12   0:00.01 php-fpm: 8.3 idle (php-fpm)
+Cooki 96786  0.0  0.0   14484  3100  -  RNs  00:12   0:00.00 ps aux

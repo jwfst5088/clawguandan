@@ -1,0 +1,54 @@
+#!/bin/sh
+BASE="http://127.0.0.1:2230/api/v1/tables"
+TFILE="/tmp/gd_players.txt"
+rm -f "$TFILE"
+
+tid=$(curl -s -X POST "$BASE" -H 'Content: application/json' -d '{}' | python3 -c "import sys,json; print(json.load(sys.stdin)['tableId'])")
+echo "Table: $tid"
+
+for i in 1 2 3 4; do
+  name="AI_$i"
+  ptype="bot"
+  [ $i -eq 4 ] && name="Human" && ptype="human"
+  resp=$(curl -s -X POST "$BASE/$tid/join" -H 'Content: application/json' -d '{"playerName":"'"$name"'","playerType":"'"$ptype"'"}')
+  pid=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin)['playerId'])")
+  pkey=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin)['playerKey'])")
+  pseat=$(echo "$resp" | python3 -c "import sys,json; print(json.load(sys.stdin)['seat'])")
+  echo "$pid:$pkey:$pseat" >> "$TFILE"
+  echo "Joined $name: seat=$pseat"
+done
+
+while IFS=':' read -r pid pkey pseat; do
+  curl -s -X POST "$BASE/$tid/ready" -H 'Content: application/json' -d '{"playerId":"'"$pid"'","playerKey":"'"$pkey"'","ready":true}' >/dev/null
+  echo "Ready: seat=$pseat"
+done < "$TFILE"
+
+sleep 3
+last=$(tail -1 "$TFILE")
+lpid=$(echo "$last" | cut -d: -f1)
+lkey=$(echo "$last" | cut -d: -f2)
+
+echo ""
+echo "=== FINAL SNAPSHOT ==="
+curl -s "$BASE/$tid/snapshot?playerId=$lpid&playerKey=$lkey" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print('phase:', d.get('phase'))
+print('status:', d.get('status'))
+h = d.get('hand')
+print('hand:', 'null' if h is None else 'present')
+if h:
+    print('  level:', h.get('level'))
+    print('  turnSeat:', h.get('turnSeat'))
+hc = d.get('private',{}).get('handCards',[])
+print('handCards count:', len(hc))
+if hc:
+    print('first 5:', hc[:5])
+print('expect kind:', d.get('expect',{}).get('kind'))
+print('expect actors:', d.get('expect',{}).get('actorPlayerIds'))
+"
+
+curl -s -X DELETE "$BASE/$tid" -o /dev/null
+rm -f "$TFILE"
+echo ""
+echo "Cleaned"

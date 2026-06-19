@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>掼蛋游戏 - Guandan</title>
+    <script>
+      (function(){
+        console.log('[guard] init');
+        var _gsLastAttempt=Date.now(),_gsLastResponse=Date.now(),_gsUnstickCount=0,_gsLeft=false;
+        var _gsOrigFetch=window.fetch;
+        window.fetch=function(){
+          var p=_gsOrigFetch.apply(this,arguments);
+          var url=typeof arguments[0]==='string'?arguments[0]:arguments[0]&&arguments[0].url||'';
+          if(url.indexOf('/nextstate')>=0||url.indexOf('/tables')>=0){
+            _gsLastAttempt=Date.now();
+            p.then(function(){_gsLastResponse=Date.now();_gsUnstickCount=0}).catch(function(){});
+            var m=url.match(/\/tables\/([^\/\?]+)/);
+            if(m){
+              sessionStorage.setItem('td',m[1]);
+              _gsLeft=false;
+              console.log('[guard] tableId stored:',m[1]);
+            }
+          }
+          return p;
+        };
+        function doLeave(tid){
+          if(_gsLeft)return;
+          _gsLeft=true;
+          console.log('[guard] user left, destroying table:',tid);
+          fetch('/kb.php?table_id='+encodeURIComponent(tid),{keepalive:true}).catch(function(){});
+          sessionStorage.removeItem('td');
+        }
+        function checkLeave(){
+          var tid=sessionStorage.getItem('td');
+          if(!tid||_gsLeft)return;
+          var now=Date.now();
+          if(now-_gsLastAttempt>3000){doLeave(tid);return;}
+          if(now-_gsLastResponse>15000){
+            _gsUnstickCount++;
+            console.warn('[guard] stuck #'+_gsUnstickCount);
+            fetch('/unstick.php?table_id='+encodeURIComponent(tid)).then(function(r){return r.json()}).then(function(d){if(d&&d.ok)_gsLastResponse=Date.now()}).catch(function(){});
+            if(_gsUnstickCount>=5){console.warn('[guard] reload');location.reload()}
+          }
+        }
+        setInterval(checkLeave,3000);
+        window.addEventListener('beforeunload',function(){
+          var tid=sessionStorage.getItem('td');
+          if(tid){
+            console.log('[guard] beforeunload leave:',tid);
+            fetch('/kb.php?table_id='+encodeURIComponent(tid),{keepalive:true}).catch(function(){});
+          }
+        });
+        var _gsPush=history.pushState;
+        history.pushState=function(){
+          var tid=sessionStorage.getItem('td');
+          var r=_gsPush.apply(this,arguments);
+          if(tid&&location.href.indexOf(tid)===-1){
+            console.log('[guard] pushState leave:',tid);
+            doLeave(tid);
+          }
+          return r;
+        };
+        var _gsReplace=history.replaceState;
+        history.replaceState=function(){
+          var tid=sessionStorage.getItem('td');
+          var r=_gsReplace.apply(this,arguments);
+          if(tid&&location.href.indexOf(tid)===-1){
+            console.log('[guard] replaceState leave:',tid);
+            doLeave(tid);
+          }
+          return r;
+        };
+        window.addEventListener('popstate',function(){
+          var tid=sessionStorage.getItem('td');
+          if(tid&&location.href.indexOf(tid)===-1){
+            console.log('[guard] popstate leave:',tid);
+            doLeave(tid);
+          }
+        });
+        new MutationObserver(function(muts){
+          for(var i=0;i<muts.length;i++){
+            var removed=muts[i].removedNodes;
+            if(removed.length>0){
+              setTimeout(checkLeave,500);
+              break;
+            }
+          }
+        }).observe(document.getElementById('root')||document.body,{childList:true,subtree:true});
+        console.log('[guard] ready');
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-Dxu5KgbK.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DZzJMTFf.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
